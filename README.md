@@ -14,11 +14,11 @@
 - Gas 정책: free gas (`min-gas-price=0`, `zeroBaseFee=true`)
 - Native coin 용도: 사용하지 않음. genesis native allocation은 비어 있음
 - 자산 모델: UUPS upgradeable ERC-20 `BPT`
-- HTTP RPC: `http://127.0.0.1:8545`
-- WebSocket RPC: `ws://127.0.0.1:8546`
+- HTTP RPC: `http://100.108.197.109:8545`
+- WebSocket RPC: `ws://100.108.197.109:8546`
 - Metrics: `http://127.0.0.1:9545/metrics`
 
-RPC, WebSocket, metrics는 컨테이너 내부에서는 `0.0.0.0`로 열지만, host port binding은 `127.0.0.1`로 제한합니다. 그래서 현재 서버 밖에서는 직접 접근할 수 없습니다.
+RPC와 WebSocket은 서버의 Tailscale IP `100.108.197.109`에만 바인딩합니다. 같은 tailnet에 들어온 외부 PC는 이 주소로 접근할 수 있고, public internet에는 노출하지 않습니다. Metrics는 서버 로컬 `127.0.0.1` 전용으로 유지합니다.
 
 ## 주요 주소
 
@@ -129,11 +129,32 @@ npm run compile
 - `docs/addresses.json`
 - `.openzeppelin/unknown-2026052501.json`
 
+## 외부 PC에서 RPC 접근
+
+외부 PC가 같은 Tailscale tailnet에 연결되어 있으면 다음 RPC URL을 사용합니다.
+
+```text
+HTTP RPC: http://100.108.197.109:8545
+WebSocket RPC: ws://100.108.197.109:8546
+Chain ID: 2026052501
+BPT proxy: 0x78ACb3b334036b644387CA28B9b944F7888af67C
+```
+
+연결 확인:
+
+```bash
+curl -s http://100.108.197.109:8545 \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
+```
+
+기대 응답의 `result`는 `0x78c31b95`입니다.
+
 ## 운영상 주의할 점
 
 - 현재는 단일 노드, 단일 validator 구성입니다. 프로세스나 서버가 멈추면 체인도 멈춥니다.
 - 단일 validator QBFT는 Byzantine fault tolerance를 제공하지 않습니다. 여러 운영 주체가 공유하는 인프라로 쓰려면 validator를 추가해야 합니다.
 - `secrets/*.key`, `data/`, `config/networkFiles/`, `.runtime-archive/`는 git에 올리지 않습니다.
-- 외부 접근이 필요하면 RPC를 public `0.0.0.0`로 바로 열지 말고 Tailscale/VPN allowlist나 reverse proxy 접근 제어를 먼저 둡니다.
+- RPC/WS는 Tailscale IP에만 바인딩합니다. public `0.0.0.0`로 직접 열지 않습니다.
 - Docker image는 digest로 고정되어 있습니다. 버전을 올릴 때는 새 tag와 digest를 함께 확인한 뒤 변경합니다.
 - 자세한 네트워크 설계 메모는 `docs/network.md`를 참고합니다.

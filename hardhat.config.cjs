@@ -32,7 +32,7 @@ module.exports = {
       chainId: 31337
     },
     besu: {
-      url: process.env.RPC_URL || "http://127.0.0.1:8545",
+      url: process.env.RPC_URL || "http://100.108.197.109:8545",
       chainId: 2026052501,
       gasPrice: 0,
       accounts: treasuryKey ? [treasuryKey] : []

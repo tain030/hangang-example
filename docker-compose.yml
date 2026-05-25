@@ -24,8 +24,8 @@ services:
       - --metrics-port=9545
       - --logging=INFO
     ports:
-      - "127.0.0.1:8545:8545"
-      - "127.0.0.1:8546:8546"
+      - "100.108.197.109:8545:8545"
+      - "100.108.197.109:8546:8546"
       - "127.0.0.1:9545:9545"
     volumes:
       - ./config/genesis.json:/config/genesis.json:ro

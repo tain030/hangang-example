@@ -7,7 +7,7 @@ import { ethers } from "ethers";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
-const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
+const RPC_URL = process.env.RPC_URL || "http://100.108.197.109:8545";
 const EXPECTED_CHAIN_ID = 2026052501n;
 const TOKEN_SYMBOL = "BPT";
 const DEPLOYMENT_FILE = resolve(ROOT, "deployments", "besu-private-tain.json");

@@ -50,10 +50,13 @@ The old native treasury allocation model has been removed. If the chain is reini
 
 ## Exposure Policy
 
-Initial deployment binds RPC, WS, and metrics to localhost only:
+RPC and WS are exposed only on the server's Tailscale IP:
 
-- `127.0.0.1:8545`
-- `127.0.0.1:8546`
+- HTTP RPC: `http://100.108.197.109:8545`
+- WebSocket RPC: `ws://100.108.197.109:8546`
+
+Metrics remains local-only:
+
 - `127.0.0.1:9545`
 
-For team access, bind to the server's Tailscale IP and restrict access through Tailscale ACLs or a reverse proxy allowlist.
+Do not bind RPC to public `0.0.0.0`. External clients should join the same Tailscale tailnet and use Tailscale ACLs if access needs to be restricted further.
