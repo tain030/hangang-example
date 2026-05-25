@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This network is a one-server, one-validator Hyperledger Besu private network for internal testing. It starts with a native token-like accounting model using Besu's native coin, a treasury allocation, and a burn address.
+This network is a one-server, one-validator Hyperledger Besu private network for internal testing. Gas is free, and the business asset is an upgradeable RBAC ERC-20 contract named `BPT`.
 
 ## Chain Parameters
 
@@ -10,27 +10,43 @@ This network is a one-server, one-validator Hyperledger Besu private network for
 | --- | --- |
 | Network name | `besu-private-tain` |
 | Chain ID | `2026052501` (`0x78c31b95`) |
-| Native symbol | `BPT` |
-| Decimals | `18` |
 | Consensus | QBFT, one validator |
+| Validator | `0x17948b3ea9b2dccd9af88b8e8fdbc25d28166f3a` |
 | Block period | `2s` |
 | Request timeout | `4s` |
-| Initial treasury allocation | `1,000,000,000 BPT` |
-| Burn address | `0x000000000000000000000000000000000000dEaD` |
+| Native allocation | empty |
+| Gas policy | `min-gas-price=0`, `zeroBaseFee=true` |
 
-## Native Mint And Burn Model
+## ERC-20 BPT Model
 
-The native protocol balance is not modified by a custom Besu fork.
+`BPT` is not the Besu native coin. The native coin is not used for gas or asset accounting. The ERC-20 contract is deployed through an OpenZeppelin UUPS proxy.
 
-- Mint: transfer `BPT` from the genesis-funded treasury account to a recipient.
-- Burn: the holder transfers `BPT` to `0x000000000000000000000000000000000000dEaD`.
-- Circulating supply: `initialSupply - treasuryBalance - burnAddressBalance`.
+| Field | Value |
+| --- | --- |
+| Name | `Besu Private Tain` |
+| Symbol | `BPT` |
+| Decimals | `18` |
+| Proxy | `0x78ACb3b334036b644387CA28B9b944F7888af67C` |
+| Implementation | `0xB193E9d08277aF3ADD8FE66d3Fb734E0221cb9A1` |
+| Initial supply | `0 BPT` |
 
-This mirrors only the operational idea of issuance and retirement. It does not provide protocol-level arbitrary balance mutation. If forced burn, issuer-specific balances, or bank-style token contracts are required, add a UUPS/RBAC ERC-20 contract layer.
+## Roles
 
-## Project Hangang Design Reference
+| Role | Account |
+| --- | --- |
+| `DEFAULT_ADMIN_ROLE` | Treasury `0x870428BB916477fEbFff5A3D6aaCbF6805Fd4c27` |
+| `UPGRADER_ROLE` | Treasury `0x870428BB916477fEbFff5A3D6aaCbF6805Fd4c27` |
+| `MINTER_ROLE` | Operator `0xa06eCe6201ccbC0FF8cbDaE337175316944B9179` |
+| `BURNER_ROLE` | Operator `0xa06eCe6201ccbC0FF8cbDaE337175316944B9179` |
 
-Project Hangang used Hyperledger Besu with QBFT in a permissioned ledger. Its issuance/burn behavior was contract-layer design: ERC-20-style digital currency/deposit token contracts, UUPS upgradeability, RBAC, and an atomic burn-and-issue flow for interbank deposit token transfers. That design is not the same as modifying Besu native balances.
+## Mint And Burn
+
+- Mint: operator calls `BPTToken.mint(to, amount)`.
+- Self burn: holder calls `BPTToken.burn(amount)`.
+- Role burn: operator calls `BPTToken.burnByRole(from, amount)`.
+- Supply: `BPTToken.totalSupply()`.
+
+The old native treasury allocation model has been removed. If the chain is reinitialized again, keep `genesis.alloc` empty and redeploy the ERC-20 proxy.
 
 ## Exposure Policy
 
@@ -41,4 +57,3 @@ Initial deployment binds RPC, WS, and metrics to localhost only:
 - `127.0.0.1:9545`
 
 For team access, bind to the server's Tailscale IP and restrict access through Tailscale ACLs or a reverse proxy allowlist.
-

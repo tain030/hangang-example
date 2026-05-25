@@ -10,22 +10,32 @@ const ROOT = resolve(__dirname, "..");
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
 const EXPECTED_CHAIN_ID = 2026052501n;
 const TOKEN_SYMBOL = "BPT";
-const INITIAL_SUPPLY_WEI = 1000000000n * 10n ** 18n;
-const BURN_ADDRESS = process.env.BURN_ADDRESS || "0x000000000000000000000000000000000000dEaD";
+const DEPLOYMENT_FILE = resolve(ROOT, "deployments", "besu-private-tain.json");
 const KEY_FILES = {
   treasury: resolve(ROOT, "secrets", "treasury.key"),
   operator: resolve(ROOT, "secrets", "operator.key")
 };
+const TOKEN_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function mint(address to, uint256 amount)",
+  "function burn(uint256 amount)",
+  "function burnByRole(address from, uint256 amount)"
+];
 
 function usage() {
   console.log(`Usage:
   node ops/wallet.mjs init-keys
   node ops/wallet.mjs address <treasury|operator> [--plain]
   node ops/wallet.mjs health
-  node ops/wallet.mjs balance <treasury|operator|burn|0x...>
+  node ops/wallet.mjs balance <treasury|operator|0x...>
   node ops/wallet.mjs mint <to> <amount>
   node ops/wallet.mjs transfer <treasury|operator|/path/to/key> <to> <amount>
-  node ops/wallet.mjs burn [treasury|operator|/path/to/key] <amount>
+  node ops/wallet.mjs burn [operator|treasury|0x...|/path/to/key] <amount>
   node ops/wallet.mjs supply
 
 Amounts are denominated in ${TOKEN_SYMBOL} with 18 decimals.`);
@@ -62,12 +72,32 @@ function addressForKeyFile(file) {
 
 function resolveAddress(value) {
   if (value === "treasury" || value === "operator") return addressForKeyFile(KEY_FILES[value]);
-  if (value === "burn") return BURN_ADDRESS;
   return ethers.getAddress(value);
 }
 
 function provider() {
   return new ethers.JsonRpcProvider(RPC_URL, Number(EXPECTED_CHAIN_ID), { staticNetwork: true });
+}
+
+function signerFor(selector) {
+  return new ethers.Wallet(readPrivateKey(keyFileFor(selector)), provider());
+}
+
+function deployment() {
+  if (!existsSync(DEPLOYMENT_FILE)) {
+    throw new Error("token_not_deployed: run ./ops/deploy-token.sh first");
+  }
+  return JSON.parse(readFileSync(DEPLOYMENT_FILE, "utf8"));
+}
+
+function tokenAddress() {
+  const value = deployment()?.token?.proxy;
+  if (!value) throw new Error("token_proxy_missing_in_deployment");
+  return ethers.getAddress(value);
+}
+
+function token(runner = provider()) {
+  return new ethers.Contract(tokenAddress(), TOKEN_ABI, runner);
 }
 
 function formatAmount(wei) {
@@ -79,23 +109,26 @@ function parseAmount(value) {
   return ethers.parseEther(value);
 }
 
-async function sendValue(keyFile, to, amount) {
-  const wallet = new ethers.Wallet(readPrivateKey(keyFile), provider());
-  const tx = await wallet.sendTransaction({
-    to: ethers.getAddress(to),
-    value: parseAmount(amount),
-    type: 0,
-    gasPrice: 0n,
-    gasLimit: 21000n
-  });
+function txOverrides() {
+  return { type: 0, gasPrice: 0n };
+}
+
+function deploymentTokenInfo() {
+  if (!existsSync(DEPLOYMENT_FILE)) return {};
+  const value = JSON.parse(readFileSync(DEPLOYMENT_FILE, "utf8"));
+  return {
+    tokenProxy: value?.token?.proxy,
+    tokenImplementation: value?.token?.implementation
+  };
+}
+
+async function waitAndPrint(tx, details) {
   const receipt = await tx.wait();
   console.log(JSON.stringify({
     hash: tx.hash,
-    from: wallet.address,
-    to: ethers.getAddress(to),
-    amount: `${amount} ${TOKEN_SYMBOL}`,
     blockNumber: receipt?.blockNumber ?? null,
-    status: receipt?.status ?? null
+    status: receipt?.status ?? null,
+    ...details
   }, null, 2));
 }
 
@@ -109,7 +142,7 @@ async function cmdInitKeys() {
     symbol: TOKEN_SYMBOL,
     treasury: addressForKeyFile(KEY_FILES.treasury),
     operator: addressForKeyFile(KEY_FILES.operator),
-    burn: BURN_ADDRESS
+    ...deploymentTokenInfo()
   };
   writeFileSync(resolve(ROOT, "docs", "addresses.json"), `${JSON.stringify(addresses, null, 2)}\n`);
   console.log(JSON.stringify({ generated, addresses }, null, 2));
@@ -129,32 +162,87 @@ async function cmdHealth() {
     blockNumber,
     gasPrice,
     freeGasOk: gasPrice === "0x0",
-    validators
+    validators,
+    tokenDeployed: existsSync(DEPLOYMENT_FILE)
   }, null, 2));
 }
 
 async function cmdBalance(target) {
   const addr = resolveAddress(target);
-  const wei = await provider().getBalance(addr);
-  console.log(JSON.stringify({ address: addr, wei: wei.toString(), formatted: formatAmount(wei) }, null, 2));
+  const wei = await token().balanceOf(addr);
+  console.log(JSON.stringify({ token: tokenAddress(), address: addr, wei: wei.toString(), formatted: formatAmount(wei) }, null, 2));
 }
 
 async function cmdSupply() {
-  const rpc = provider();
-  const treasury = addressForKeyFile(KEY_FILES.treasury);
-  const [treasuryBalance, burnBalance] = await Promise.all([
-    rpc.getBalance(treasury),
-    rpc.getBalance(BURN_ADDRESS)
+  const erc20 = token();
+  const [name, symbol, decimals, totalSupply] = await Promise.all([
+    erc20.name(),
+    erc20.symbol(),
+    erc20.decimals(),
+    erc20.totalSupply()
   ]);
-  const circulating = INITIAL_SUPPLY_WEI - treasuryBalance - burnBalance;
   console.log(JSON.stringify({
-    initialSupply: formatAmount(INITIAL_SUPPLY_WEI),
-    treasury,
-    treasuryBalance: formatAmount(treasuryBalance),
-    burn: BURN_ADDRESS,
-    burnBalance: formatAmount(burnBalance),
-    circulating: formatAmount(circulating)
+    token: tokenAddress(),
+    name,
+    symbol,
+    decimals: Number(decimals),
+    totalSupply: formatAmount(totalSupply)
   }, null, 2));
+}
+
+async function cmdMint(to, amount) {
+  const signer = signerFor("operator");
+  const recipient = resolveAddress(to);
+  const tx = await token(signer).mint(recipient, parseAmount(amount), txOverrides());
+  await waitAndPrint(tx, {
+    action: "mint",
+    token: tokenAddress(),
+    operator: signer.address,
+    to: recipient,
+    amount: `${amount} ${TOKEN_SYMBOL}`
+  });
+}
+
+async function cmdTransfer(selector, to, amount) {
+  const signer = signerFor(selector);
+  const recipient = resolveAddress(to);
+  const tx = await token(signer).transfer(recipient, parseAmount(amount), txOverrides());
+  await waitAndPrint(tx, {
+    action: "transfer",
+    token: tokenAddress(),
+    from: signer.address,
+    to: recipient,
+    amount: `${amount} ${TOKEN_SYMBOL}`
+  });
+}
+
+async function cmdBurn(selector, amount) {
+  if (!selector || !amount) throw new Error("usage: burn [operator|treasury|0x...|/path/to/key] <amount>");
+
+  if (KEY_FILES[selector] || existsSync(keyFileFor(selector))) {
+    const signer = signerFor(selector);
+    const tx = await token(signer).burn(parseAmount(amount), txOverrides());
+    await waitAndPrint(tx, {
+      action: "burn",
+      mode: "self",
+      token: tokenAddress(),
+      from: signer.address,
+      amount: `${amount} ${TOKEN_SYMBOL}`
+    });
+    return;
+  }
+
+  const operator = signerFor("operator");
+  const from = resolveAddress(selector);
+  const tx = await token(operator).burnByRole(from, parseAmount(amount), txOverrides());
+  await waitAndPrint(tx, {
+    action: "burn",
+    mode: "burnByRole",
+    token: tokenAddress(),
+    operator: operator.address,
+    from,
+    amount: `${amount} ${TOKEN_SYMBOL}`
+  });
 }
 
 async function main() {
@@ -176,14 +264,14 @@ async function main() {
         return await cmdBalance(args[0]);
       case "mint":
         if (args.length !== 2) throw new Error("usage: mint <to> <amount>");
-        return await sendValue(KEY_FILES.treasury, resolveAddress(args[0]), args[1]);
+        return await cmdMint(args[0], args[1]);
       case "transfer":
         if (args.length !== 3) throw new Error("usage: transfer <treasury|operator|/path/to/key> <to> <amount>");
-        return await sendValue(keyFileFor(args[0]), resolveAddress(args[1]), args[2]);
+        return await cmdTransfer(args[0], args[1], args[2]);
       case "burn": {
-        const selector = args.length === 1 ? "treasury" : args[0];
+        const selector = args.length === 1 ? "operator" : args[0];
         const amount = args.length === 1 ? args[0] : args[1];
-        return await sendValue(keyFileFor(selector), BURN_ADDRESS, amount);
+        return await cmdBurn(selector, amount);
       }
       case "supply":
         return await cmdSupply();
@@ -198,4 +286,3 @@ async function main() {
 }
 
 await main();
-

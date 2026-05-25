@@ -6,6 +6,7 @@ cd "$ROOT"
 
 node ops/wallet.mjs init-keys
 node ops/render-qbft-config.mjs
+mkdir -p data/besu
 
 if [[ -f config/genesis.json || -f data/besu/key ]]; then
   echo "config/genesis.json or data/besu/key already exists; refusing to overwrite."
@@ -14,9 +15,13 @@ if [[ -f config/genesis.json || -f data/besu/key ]]; then
 fi
 
 if [[ ! -f config/networkFiles/genesis.json ]]; then
+  if [[ -d config/networkFiles ]]; then
+    echo "config/networkFiles exists without genesis.json; move it aside before reinitializing."
+    exit 1
+  fi
   docker run --rm \
     -v "$ROOT/config:/config" \
-    hyperledger/besu:26.5.0 \
+    hyperledger/besu:26.5.0@sha256:f1dad21871b49bf54fce2a8c547d96cb7835005343af02eebd72da137723c3bc \
     operator generate-blockchain-config \
     --config-file=/config/qbftConfigFile.json \
     --to=/config/networkFiles \

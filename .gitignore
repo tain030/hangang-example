@@ -1,7 +1,10 @@
 node_modules/
+artifacts/
+cache/
+coverage/
+.runtime-archive/
 data/
 config/networkFiles/
 secrets/*.key
 secrets/*.json
 *.log
-

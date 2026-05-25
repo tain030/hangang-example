@@ -1,0 +1,18 @@
+{
+  "network": "besu-private-tain",
+  "chainId": 2026052501,
+  "token": {
+    "name": "Besu Private Tain",
+    "symbol": "BPT",
+    "decimals": 18,
+    "proxy": "0x78ACb3b334036b644387CA28B9b944F7888af67C",
+    "implementation": "0xB193E9d08277aF3ADD8FE66d3Fb734E0221cb9A1"
+  },
+  "roles": {
+    "admin": "0x870428BB916477fEbFff5A3D6aaCbF6805Fd4c27",
+    "upgrader": "0x870428BB916477fEbFff5A3D6aaCbF6805Fd4c27",
+    "minter": "0xa06eCe6201ccbC0FF8cbDaE337175316944B9179",
+    "burner": "0xa06eCe6201ccbC0FF8cbDaE337175316944B9179"
+  },
+  "deployedAtBlock": 220
+}
