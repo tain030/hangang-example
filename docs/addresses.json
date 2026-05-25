@@ -1,0 +1,8 @@
+{
+  "network": "besu-private-tain",
+  "chainId": 2026052501,
+  "symbol": "BPT",
+  "treasury": "0x870428BB916477fEbFff5A3D6aaCbF6805Fd4c27",
+  "operator": "0xa06eCe6201ccbC0FF8cbDaE337175316944B9179",
+  "burn": "0x000000000000000000000000000000000000dEaD"
+}

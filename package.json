@@ -1,0 +1,18 @@
+{
+  "name": "besu-private-tain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "init:keys": "node ops/wallet.mjs init-keys",
+    "render:genesis-config": "node ops/render-qbft-config.mjs",
+    "health": "node ops/wallet.mjs health",
+    "supply": "node ops/wallet.mjs supply"
+  },
+  "dependencies": {
+    "ethers": "6.15.0"
+  },
+  "overrides": {
+    "ws": "8.20.1"
+  }
+}
