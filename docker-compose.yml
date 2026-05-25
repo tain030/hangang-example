@@ -1,6 +1,6 @@
 services:
   besu:
-    image: hyperledger/besu:26.5.0
+    image: hyperledger/besu:26.5.0@sha256:f1dad21871b49bf54fce2a8c547d96cb7835005343af02eebd72da137723c3bc
     container_name: besu-private-tain
     restart: unless-stopped
     command:
